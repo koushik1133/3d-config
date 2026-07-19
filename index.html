@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Apparel Configurator | VirtualThreads</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="/src/style.css" />
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- 3D Canvas Container -->
+      <div id="canvas-container" class="canvas-container automatic">
+        <!-- Loader -->
+        <div id="app-loader" class="app-loader">
+          <div class="loader-spinner"></div>
+          <div class="loader-text">Loading 3D Engine...</div>
+        </div>
+      </div>
+
+      <!-- Hidden Inputs for Uploads -->
+      <input type="file" id="design-upload-input" accept="image/png, image/jpeg" style="display: none;" />
+      <input type="file" id="bg-upload-input" accept="image/png, image/jpeg" style="display: none;" />
+
+      <!-- Fullscreen Toggle Button -->
+      <button id="fullscreen-toggle" class="floating-btn fullscreen-btn" title="Toggle Fullscreen">
+        <i data-lucide="maximize"></i>
+      </button>
+
+      <!-- Premium Glassmorphic Sidebar -->
+      <aside class="sidebar">
+        <!-- Logo Header -->
+        <div class="sidebar-header">
+          <div class="logo">
+            <svg viewBox="0 0 100 100" class="logo-icon">
+              <path d="M20,20 L80,20 L50,80 Z" fill="none" stroke="currentColor" stroke-width="12" stroke-linejoin="round"/>
+              <path d="M35,35 L65,35 L50,65 Z" fill="currentColor"/>
+            </svg>
+            <span class="brand-name">VirtualThreads</span>
+          </div>
+          <span class="badge">PRO</span>
+        </div>
+
+        <!-- Sidebar Scrollable Controls -->
+        <div class="sidebar-controls">
+          <!-- Upload Design Section -->
+          <div class="control-group upload-group">
+            <button id="upload-design-btn" class="btn btn-primary btn-upload">
+              <i data-lucide="upload-cloud"></i>
+              <span>Upload Your Design</span>
+            </button>
+            <div id="upload-preview-container" class="upload-preview-container" style="display: none;">
+              <span class="preview-label">Active Design:</span>
+              <div class="preview-card">
+                <img id="upload-preview" src="" alt="Design Preview" />
+                <button id="remove-design-btn" class="btn-remove" title="Remove Design">
+                  <i data-lucide="x"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced Controls Toggle -->
+          <div class="control-group toggle-group">
+            <button id="advanced-toggle-btn" class="btn btn-secondary btn-advanced-toggle">
+              <i data-lucide="sliders"></i>
+              <span>Advanced Controls</span>
+              <i data-lucide="chevron-right" class="arrow-icon"></i>
+            </button>
+          </div>
+
+          <!-- Main Configuration Panels -->
+          <div class="panels-container">
+            <!-- Standard Panels -->
+            <div id="main-panels" class="config-section active">
+              
+              <!-- Garment Color Panel -->
+              <div class="accordion-item expanded">
+                <button class="accordion-header">
+                  <span class="header-title">Garment Color</span>
+                  <i data-lucide="chevron-down" class="accordion-arrow"></i>
+                </button>
+                <div class="accordion-content">
+                  <!-- Swatches -->
+                  <div class="color-swatches">
+                    <button class="swatch active" data-color="#ffffff" style="background-color: #ffffff;" title="Clean White"></button>
+                    <button class="swatch" data-color="#111111" style="background-color: #111111;" title="Matte Black"></button>
+                    <button class="swatch" data-color="#3c5244" style="background-color: #3c5244;" title="Forest Green"></button>
+                    <button class="swatch" data-color="#1f3764" style="background-color: #1f3764;" title="Royal Blue"></button>
+                    <button class="swatch" data-color="#d68f29" style="background-color: #d68f29;" title="Mustard Yellow"></button>
+                    <button class="swatch" data-color="#801c1c" style="background-color: #801c1c;" title="Crimson Red"></button>
+                  </div>
+                  <!-- Custom Picker -->
+                  <div class="custom-color-picker">
+                    <label for="garment-color-picker">Custom Garment Color:</label>
+                    <div class="picker-wrapper">
+                      <input type="color" id="garment-color-picker" value="#ffffff" />
+                      <span id="garment-color-hex" class="hex-text">#FFFFFF</span>
+                    </div>
+                  </div>
+                  <!-- Component Colors (Multi-color support) -->
+                  <div class="multi-color-options">
+                    <div class="component-color">
+                      <span>Sleeves:</span>
+                      <input type="color" id="sleeves-color-picker" value="#ffffff" />
+                    </div>
+                    <div class="component-color">
+                      <span>Collar:</span>
+                      <input type="color" id="collar-color-picker" value="#ffffff" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Background Panel -->
+              <div class="accordion-item">
+                <button class="accordion-header">
+                  <span class="header-title">Background</span>
+                  <i data-lucide="chevron-down" class="accordion-arrow"></i>
+                </button>
+                <div class="accordion-content">
+                  <div class="bg-options">
+                    <button id="bg-image-btn" class="btn btn-secondary btn-icon-label" title="Upload Custom Background">
+                      <i data-lucide="image"></i>
+                      <span>Image</span>
+                    </button>
+                    <button id="bg-reset-btn" class="btn btn-secondary btn-icon-only" title="Reset Background">
+                      <i data-lucide="rotate-ccw"></i>
+                    </button>
+                    <div class="picker-wrapper">
+                      <input type="color" id="bg-color-picker" value="#1a1a1a" />
+                      <span id="bg-color-hex" class="hex-text">#1A1A1A</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Animation Panel -->
+              <div class="accordion-item">
+                <button class="accordion-header">
+                  <span class="header-title">Motion Effects</span>
+                  <i data-lucide="chevron-down" class="accordion-arrow"></i>
+                </button>
+                <div class="accordion-content">
+                  <!-- Animation Selector -->
+                  <div class="toggle-buttons-grid">
+                    <button class="toggle-btn active" data-anim="static">
+                      <i data-lucide="pause-circle"></i>
+                      <span>Static</span>
+                    </button>
+                    <button class="toggle-btn" data-anim="walk">
+                      <i data-lucide="chevrons-up"></i>
+                      <span>Walk</span>
+                    </button>
+                    <button class="toggle-btn" data-anim="waves">
+                      <i data-lucide="wind"></i>
+                      <span>Waves</span>
+                    </button>
+                    <button class="toggle-btn" data-anim="knit">
+                      <i data-lucide="zoom-in"></i>
+                      <span>Knit</span>
+                    </button>
+                  </div>
+                  <!-- Animation Speed Slider -->
+                  <div class="slider-group">
+                    <div class="slider-header">
+                      <span class="slider-label">Animation Speed</span>
+                      <span id="anim-speed-value" class="slider-value">0.50x</span>
+                    </div>
+                    <input type="range" id="anim-speed" min="0.1" max="1.5" step="0.05" value="0.5" class="custom-slider" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Camera Animation Panel -->
+              <div class="accordion-item">
+                <button class="accordion-header">
+                  <span class="header-title">Camera Animation</span>
+                  <i data-lucide="chevron-down" class="accordion-arrow"></i>
+                </button>
+                <div class="accordion-content">
+                  <div class="toggle-buttons-grid col-3">
+                    <button class="toggle-btn active" data-camera="none">
+                      <i data-lucide="video-off"></i>
+                      <span>None</span>
+                    </button>
+                    <button class="toggle-btn" data-camera="rotate">
+                      <i data-lucide="rotate-cw"></i>
+                      <span>Rotate</span>
+                    </button>
+                    <button class="toggle-btn" data-camera="orbit-zoom">
+                      <i data-lucide="refresh-cw"></i>
+                      <span>Orbit & Zoom</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Advanced Panel (Hidden by default) -->
+            <div id="advanced-panels" class="config-section">
+              <div class="section-back-header">
+                <button id="advanced-back-btn" class="btn-back">
+                  <i data-lucide="arrow-left"></i>
+                  <span>Back to Main Menu</span>
+                </button>
+              </div>
+
+              <!-- Advanced Effects -->
+              <div class="accordion-item expanded">
+                <button class="accordion-header">
+                  <span class="header-title">Fabric Wash & Textures</span>
+                  <i data-lucide="chevron-down" class="accordion-arrow"></i>
+                </button>
+                <div class="accordion-content">
+                  <!-- Acid Wash Slider -->
+                  <div class="slider-group">
+                    <div class="slider-header">
+                      <span class="slider-label font-semi">Acid Wash</span>
+                      <span id="acid-wash-value" class="slider-value">0.00</span>
+                    </div>
+                    <input type="range" id="acid-wash-slider" min="0.0" max="1.0" step="0.01" value="0.0" class="custom-slider" />
+                  </div>
+
+                  <!-- Puff Print Slider -->
+                  <div class="slider-group">
+                    <div class="slider-header">
+                      <span class="slider-label font-semi">Puff Print Height</span>
+                      <span id="puff-print-value" class="slider-value">0.00</span>
+                    </div>
+                    <input type="range" id="puff-print-slider" min="0.0" max="1.0" step="0.01" value="0.0" class="custom-slider" />
+                  </div>
+
+                  <!-- Design Scale Slider -->
+                  <div class="slider-group">
+                    <div class="slider-header">
+                      <span class="slider-label font-semi">Design Scale</span>
+                      <span id="design-scale-value" class="slider-value">1.00</span>
+                    </div>
+                    <input type="range" id="design-scale-slider" min="0.2" max="2.5" step="0.05" value="1.0" class="custom-slider" />
+                  </div>
+
+                  <!-- Design Position X Slider -->
+                  <div class="slider-group">
+                    <div class="slider-header">
+                      <span class="slider-label font-semi">Design Position X</span>
+                      <span id="design-x-value" class="slider-value">0.00</span>
+                    </div>
+                    <input type="range" id="design-x-slider" min="-0.5" max="0.5" step="0.01" value="0.0" class="custom-slider" />
+                  </div>
+
+                  <!-- Design Position Y Slider -->
+                  <div class="slider-group">
+                    <div class="slider-header">
+                      <span class="slider-label font-semi">Design Position Y</span>
+                      <span id="design-y-value" class="slider-value">0.00</span>
+                    </div>
+                    <input type="range" id="design-y-slider" min="-0.5" max="0.5" step="0.01" value="0.0" class="custom-slider" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Export Options Footer -->
+        <div class="sidebar-footer">
+          <div class="export-settings">
+            <!-- Aspect Ratio / Canvas Sizing -->
+            <div class="setting-row">
+              <span class="setting-label">Frame Size</span>
+              <div class="radio-toggle-group">
+                <button id="btn-size-auto" class="radio-btn active">Auto</button>
+                <button id="btn-size-portrait" class="radio-btn">Portrait (9:16)</button>
+              </div>
+            </div>
+            <!-- Quality Sizing -->
+            <div class="setting-row">
+              <span class="setting-label">Render Quality</span>
+              <div class="radio-toggle-group">
+                <button id="btn-quality-fast" class="radio-btn active">Standard</button>
+                <button id="btn-quality-high" class="radio-btn">High (HQ)</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="export-actions">
+            <button id="btn-export-image" class="btn btn-action">
+              <i data-lucide="image"></i>
+              <span>Export Image</span>
+            </button>
+            <button id="btn-export-video" class="btn btn-action">
+              <i data-lucide="video"></i>
+              <span>Export Video</span>
+            </button>
+            <button id="btn-export-3d" class="btn btn-action">
+              <i data-lucide="box"></i>
+              <span>Export 3D Model</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Video Export Status Modal Overlay -->
+      <div id="export-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 class="modal-title">Recording Configurator Video</h3>
+          </div>
+          <div class="modal-body">
+            <div class="progress-bar-container">
+              <div id="export-progress" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <p id="export-status-text" class="modal-text">Rendering frames... 0%</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
