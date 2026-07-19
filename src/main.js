@@ -276,7 +276,7 @@ function loadActiveModel(modelSlug) {
       const json = await res.json();
       const binUri = json.buffers[0].uri;
       
-      const parts = ['part_aa', 'part_ab', 'part_ac', 'part_ad', 'part_ae'];
+      const parts = ['part_aa', 'part_ab', 'part_ac', 'part_ad', 'part_ae', 'part_af', 'part_ag', 'part_ah', 'part_ai'];
       const buffers = [];
       for (const p of parts) {
         const r = await fetch(dir + binUri + '.' + p).catch(() => null);
