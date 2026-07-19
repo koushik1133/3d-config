@@ -269,10 +269,48 @@ function loadActiveModel(modelSlug) {
   }
   if (mixer) { mixer.stopAllAction(); mixer = null; }
 
-  const modelInfo = modelsConfig[modelSlug];
-  if (!modelInfo) return;
+  const loadGltf = async (path) => {
+    const dir = path.substring(0, path.lastIndexOf('/') + 1);
+    try {
+      const res = await fetch(path);
+      const json = await res.json();
+      const binUri = json.buffers[0].uri;
+      
+      const parts = ['part_aa', 'part_ab', 'part_ac', 'part_ad', 'part_ae'];
+      const buffers = [];
+      for (const p of parts) {
+        const r = await fetch(dir + binUri + '.' + p).catch(() => null);
+        if (r && r.ok) {
+          buffers.push(await r.arrayBuffer());
+        }
+      }
 
-  gltfLoader.load(modelInfo.path, (gltf) => {
+      if (buffers.length > 0) {
+        const totalLen = buffers.reduce((acc, b) => acc + b.byteLength, 0);
+        const combined = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const b of buffers) {
+          combined.set(new Uint8Array(b), offset);
+          offset += b.byteLength;
+        }
+        const blob = new Blob([combined.buffer]);
+        const blobUrl = URL.createObjectURL(blob);
+        json.buffers[0].uri = blobUrl;
+        return new Promise((resolve, reject) => {
+          gltfLoader.parse(JSON.stringify(json), dir, (gltf) => {
+            URL.revokeObjectURL(blobUrl);
+            resolve(gltf);
+          }, reject);
+        });
+      }
+    } catch (e) {}
+
+    return new Promise((resolve, reject) => {
+      gltfLoader.load(path, resolve, undefined, reject);
+    });
+  };
+
+  loadGltf(modelInfo.path).then((gltf) => {
     tshirtGroup = gltf.scene;
 
     // ─── STEP 1: Reveal zero-scaled pivot nodes ───────────────────────────────
@@ -315,17 +353,16 @@ function loadActiveModel(modelSlug) {
     // CRITICAL: Force update of matrixWorld hierarchy so bounding box uses true node scales & transforms
     tshirtGroup.updateMatrixWorld(true);
 
-    // ─── STEP 3: Animation mixer disabled on load to prevent zero-scale keyframes ───
-    mixer = null;
-
-    // ─── STEP 4: Compute exact bounding box of visible meshes ──────────────
+    // ─── STEP 4: Compute visible bounding box using exact world matrices ─────
     tshirtGroup.updateMatrixWorld(true);
-
     const box = new THREE.Box3();
     let hasMesh = false;
+
     tshirtGroup.traverse((child) => {
       if (child.isMesh && child.visible) {
-        child.geometry.computeBoundingBox();
+        if (!child.geometry.boundingBox) {
+          child.geometry.computeBoundingBox();
+        }
         const tmp = child.geometry.boundingBox.clone().applyMatrix4(child.matrixWorld);
         if (!tmp.isEmpty()) {
           const s = tmp.getSize(new THREE.Vector3());
@@ -357,12 +394,8 @@ function loadActiveModel(modelSlug) {
       targetSize = 2.5; yOffset = 0.1;
     } else if (modelSlug === 'sweatpants') {
       targetSize = 4.0; yOffset = -0.3;
-    } else if (['hanging-tshirt', 'hanging-hoodie'].includes(modelSlug)) {
-      targetSize = 4.2; yOffset = 0.2;
-    } else if (['sweatshirt', 'hoodie', 'polo-shirt', 'zip-hoodie', 'boxy-tshirt', 'regular-tshirt', 'oversized-tshirt'].includes(modelSlug)) {
-      targetSize = 4.2; yOffset = 0.1;
-    } else {
-      targetSize = 4.5; yOffset = 0.5;
+    } else if (modelSlug === 'sweatshirt') {
+      targetSize = 4.0; yOffset = -0.6;
     }
 
     // Offset tshirtGroup so its geometry bounding box center sits at (0, 0, 0)
