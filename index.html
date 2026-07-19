@@ -25,6 +25,53 @@
         </div>
       </div>
 
+      <!-- Floating Configurator Controls (Replacing Hidden Sidebar) -->
+      <div class="floating-controls">
+        <div class="control-header">
+          <h3>Select Garment</h3>
+        </div>
+        <div class="select-wrapper">
+          <select id="garment-select" class="custom-select">
+            <option value="oversized-tshirt">Oversized T-Shirt</option>
+            <option value="regular-tshirt">Regular T-Shirt</option>
+            <option value="boxy-tshirt">Cropped Boxy T-Shirt</option>
+            <option value="hanging-tshirt">Hanging T-Shirt</option>
+            <option value="sweatshirt">Oversized Sweatshirt</option>
+            <option value="hoodie">Oversized Hoodie</option>
+            <option value="hanging-hoodie">Hanging Hoodie</option>
+            <option value="polo-shirt">Oversized Polo Shirt</option>
+            <option value="zip-hoodie">Zip Hoodie</option>
+            <option value="sweatpants">Sweatpants</option>
+            <option value="cap">Cap</option>
+          </select>
+        </div>
+        
+        <div class="color-controls-section">
+          <h4>Customize Colors</h4>
+          <div class="color-picker-item" id="picker-body">
+            <label>Garment Color</label>
+            <div class="picker-row">
+              <input type="color" id="float-color-body" value="#ffffff" />
+              <span id="float-hex-body" class="hex-value">#FFFFFF</span>
+            </div>
+          </div>
+          <div class="color-picker-item" id="picker-sleeves">
+            <label>Sleeves Color</label>
+            <div class="picker-row">
+              <input type="color" id="float-color-sleeves" value="#ffffff" />
+              <span id="float-hex-sleeves" class="hex-value">#FFFFFF</span>
+            </div>
+          </div>
+          <div class="color-picker-item" id="picker-collar">
+            <label>Collar/Trim Color</label>
+            <div class="picker-row">
+              <input type="color" id="float-color-collar" value="#ffffff" />
+              <span id="float-hex-collar" class="hex-value">#FFFFFF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Hidden Inputs for Uploads -->
       <input type="file" id="design-upload-input" accept="image/png, image/jpeg" style="display: none;" />
       <input type="file" id="bg-upload-input" accept="image/png, image/jpeg" style="display: none;" />

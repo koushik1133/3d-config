@@ -832,3 +832,135 @@ body {
     right: 16px;
   }
 }
+
+/* Premium Floating Controls Card */
+.floating-controls {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 320px;
+  z-index: 100;
+  background: rgba(18, 18, 22, 0.75);
+  border: 1px solid var(--border-glass);
+  border-radius: 20px;
+  box-shadow: var(--shadow-premium);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  transition: all var(--transition-normal);
+}
+
+.floating-controls .control-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.floating-controls .select-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.floating-controls .custom-select {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.95rem;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: all var(--transition-normal);
+}
+
+.floating-controls .custom-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.floating-controls .select-wrapper::after {
+  content: '▼';
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.floating-controls .color-controls-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.floating-controls .color-controls-section h4 {
+  margin: 0 0 4px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.floating-controls .color-picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: opacity var(--transition-normal), max-height var(--transition-normal);
+}
+
+.floating-controls .color-picker-item.hidden {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  margin: 0;
+  padding: 0;
+}
+
+.floating-controls .color-picker-item label {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.floating-controls .picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.floating-controls input[type="color"] {
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+}
+
+.floating-controls input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.floating-controls input[type="color"]::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.floating-controls .hex-value {
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+

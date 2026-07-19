@@ -4,8 +4,37 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
+const TEXTURE_MAPS = {
+  'oversized-tshirt': { normal: ['normaldetailsv2.jpg', 'NormalFabric.png'], ao: ['ao_tshirt_outside.jpg'] },
+  'regular-tshirt': { normal: ['NormalFabric.png'], ao: ['outsideao.jpg'] },
+  'boxy-tshirt': { normal: ['Normaldetailsv2_boxyt-shirt.png', 'NormalFabric.png'], ao: ['outsideaocropped.jpg'] },
+  'hanging-tshirt': { normal: ['NormalFabric.png'], ao: ['ao_outside.jpg'] },
+  'sweatshirt': { normal: ['sweatshirtnormal.jpg', 'NormalFabric.png'], ao: ['ao_outside.jpg'] },
+  'hoodie': { normal: ['NormalFabric.png'], ao: ['outsideaohoodie.jpg'] },
+  'hanging-hoodie': { normal: ['NormalFabric.png'], ao: ['ambientoutside.jpg'] },
+  'polo-shirt': { normal: ['NormalFabric.png'], ao: ['poloshirt_Bake1_CyclesBake_AO.jpg'] },
+  'zip-hoodie': { normal: ['normaldetails.jpg', 'NormalFabric.png'], ao: ['outsidenewuv.jpg'] },
+  'sweatpants': { normal: ['NormalDetails.jpg', 'NormalFabric.png'], ao: ['eggjog.jpg'] },
+  'cap': { normal: ['normalmapv3.jpg'], ao: ['Cap_Bake1_CyclesBake_AO.png'] }
+};
+
 // --- State Management ---
+const modelsConfig = {
+  'oversized-tshirt': { name: 'Oversized T-Shirt', path: '/model/oversized-tshirt/tshirt-sizingtest.gltf', type: 'top' },
+  'regular-tshirt': { name: 'Regular T-Shirt', path: '/model/regular-tshirt/tshirt-sizingtest.gltf', type: 'top' },
+  'boxy-tshirt': { name: 'Cropped Boxy T-Shirt', path: '/model/boxy-tshirt/tshirt-sizingtest.gltf', type: 'top' },
+  'hanging-tshirt': { name: 'Hanging T-Shirt', path: '/model/hanging-tshirt/tshirt-sizingtest.gltf', type: 'top' },
+  'sweatshirt': { name: 'Oversized Sweatshirt', path: '/model/sweatshirt/tshirt-sizingtest.gltf', type: 'top' },
+  'hoodie': { name: 'Oversized Hoodie', path: '/model/hoodie/tshirt-sizingtest.gltf', type: 'top' },
+  'hanging-hoodie': { name: 'Hanging Hoodie', path: '/model/hanging-hoodie/tshirt-sizingtest.gltf', type: 'top' },
+  'polo-shirt': { name: 'Oversized Polo Shirt', path: '/model/polo-shirt/tshirt-sizingtest.gltf', type: 'top' },
+  'zip-hoodie': { name: 'Zip Hoodie', path: '/model/zip-hoodie/tshirt-sizingtest.gltf', type: 'top' },
+  'sweatpants': { name: 'Sweatpants', path: '/model/sweatpants/tshirt-sizingtest.gltf', type: 'bottom' },
+  'cap': { name: 'Cap', path: '/model/cap/tshirt-sizingtest.gltf', type: 'accessory' }
+};
+
 const state = {
+  activeModel: 'oversized-tshirt',
   garmentColor: '#ffffff',
   sleevesColor: '#ffffff',
   collarColor: '#ffffff',
@@ -22,12 +51,24 @@ const state = {
   motionSpeed: 0.5,
   cameraAnim: 'none', // 'none', 'rotate', 'orbit-zoom'
   frameSize: 'auto', // 'auto', 'portrait'
-  renderQuality: 'fast' // 'fast', 'high'
+  renderQuality: 'fast', // 'fast', 'high'
+  activeYOffset: -0.5
 };
 
 // --- DOM Elements ---
 const container = document.getElementById('canvas-container');
 const loader = document.getElementById('app-loader');
+
+// Floating controls DOM Elements
+const garmentSelect = document.getElementById('garment-select');
+const floatColorBody = document.getElementById('float-color-body');
+const floatHexBody = document.getElementById('float-hex-body');
+const floatColorSleeves = document.getElementById('float-color-sleeves');
+const floatHexSleeves = document.getElementById('float-hex-sleeves');
+const floatColorCollar = document.getElementById('float-color-collar');
+const floatHexCollar = document.getElementById('float-hex-collar');
+const pickerSleeves = document.getElementById('picker-sleeves');
+const pickerCollar = document.getElementById('picker-collar');
 const fullscreenToggle = document.getElementById('fullscreen-toggle');
 const designUploadInput = document.getElementById('design-upload-input');
 const bgUploadInput = document.getElementById('bg-upload-input');
@@ -171,7 +212,7 @@ function initEngine() {
 
 // --- Load Textures & Custom Shader ---
 function loadTexturesAndModel() {
-  // Load AO & Normal textures
+  // Load fallback/shared textures
   defaultOutsideAO = textureLoader.load('/textures/ao_tshirt_outside.jpg');
   defaultInsideAO = textureLoader.load('/textures/ao_tshirt_inside.jpg');
   normalFabric = textureLoader.load('/textures/NormalFabric.png');
@@ -188,35 +229,111 @@ function loadTexturesAndModel() {
 
   normalFabric.repeat.set(30, 30); // Fine thread tiling
 
-  gltfLoader.load('/model/tshirt-sizingtest.gltf', (gltf) => {
-    tshirtGroup = gltf.scene;
+  // Support ?model=slug URL param for testing
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlModel = urlParams.get('model');
+  if (urlModel && modelsConfig[urlModel]) {
+    state.activeModel = urlModel;
+    if (garmentSelect) garmentSelect.value = urlModel;
+  }
 
-    // Reset pivot nodes scale to 1, 1, 1 (Verge3D hides options by zero-scaling pivots)
-    tshirtGroup.traverse((child) => {
-      if (child.name.toLowerCase().includes('pivot')) {
-        child.scale.set(1, 1, 1);
-      }
-    });
+  // Load the initial model
+  loadActiveModel(state.activeModel);
+}
 
-    // Traverse first to hide backgrounds, so bounds calculation ignores them
+
+function loadActiveModel(modelSlug) {
+  // Show loader
+  loader.style.display = 'flex';
+  loader.style.opacity = '1';
+  loader.querySelector('.loader-text').innerText = 'Loading 3D Garment...';
+
+  // Remove existing model wrapper
+  const existingWrapper = scene.getObjectByName('garmentWrapper');
+  if (existingWrapper) {
+    scene.remove(existingWrapper);
+  }
+  if (tshirtGroup) {
     tshirtGroup.traverse((child) => {
       if (child.isMesh) {
-        const name = child.name.toLowerCase();
-        if (name.includes('env') || name.includes('bg') || name.includes('camera') || name.includes('sphere')) {
-          child.visible = false;
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        } else {
+          child.material.dispose();
         }
       }
     });
+    tshirtGroup = null;
+    tshirtMeshes = [];
+  }
+  if (mixer) { mixer.stopAllAction(); mixer = null; }
 
+  const modelInfo = modelsConfig[modelSlug];
+  if (!modelInfo) return;
+
+  gltfLoader.load(modelInfo.path, (gltf) => {
+    tshirtGroup = gltf.scene;
+
+    // ─── STEP 1: Reveal zero-scaled pivot nodes ───────────────────────────────
+    // Verge3D hides garment variants by setting pivot nodes to scale=(0,0,0).
+    // We must set these to scale=(1,1,1) BEFORE we do any visibility logic.
+    tshirtGroup.traverse((child) => {
+      if (child.scale.x === 0 || child.scale.y === 0 || child.scale.z === 0) {
+        child.scale.set(1, 1, 1);
+        child.matrixAutoUpdate = true;
+        child.updateMatrix();
+      }
+    });
+
+    // ─── STEP 2: Show only the static garment mesh, hide everything else ─────
+    // Naming conventions across all 11 models:
+    //   GARMENT (show): tshirt_static, Cap.001, hanger*, kgi_SnapLock*, Rope*, Metal lock*, 3Dmodelexport (used for some models as static), t-shirtstaticmodel
+    //   BACKGROUND/ENV (hide): env_sphere, cameradefault*, camrotate*, camrotatezoom*, *_bg, v3d_Proxy*, Plane.00*
+    //   DUPLICATE EXPORT (hide): 3Dmodelexport (Verge3D duplicate meshes offset by ~12 units on X/Y)
+    //   ANIMATION VARIANTS (hide): tshirt_    // Nodes / mesh patterns that should be hidden to keep clean garment presentation without hangers/cameras/env
+    const hiddenPatterns = [
+      'env_sphere', 'cameradefault', 'camrotate', 'tshirt_walking', 'tshirt_waves',
+      '3dmodelexport', 'v3d_proxy', 'snaplock', 'rope', 'plane', 'hanger', 'stand', 'metal01'
+    ];
+
+    let meshDebug = [];
+    tshirtGroup.traverse((child) => {
+      if (!child.isMesh) return;
+      const name = child.name.toLowerCase();
+      // Hide hanger hardware and duplicate Verge3D variant meshes ending in digits (e.g. tshirt_static002)
+      const isDuplicateVariant = (name.includes('tshirt_static') || name.includes('3dmodelexport')) && /\d{3,}$/.test(name);
+      const shouldHide = hiddenPatterns.some(p => name.includes(p)) || isDuplicateVariant;
+      child.visible = !shouldHide;
+      if (!shouldHide) {
+        meshDebug.push(name + '→SHOW');
+      }
+    });
+
+    console.log('MESH VISIBILITY ['+modelSlug+']:', meshDebug.join(', '));
+
+    // CRITICAL: Force update of matrixWorld hierarchy so bounding box uses true node scales & transforms
     tshirtGroup.updateMatrixWorld(true);
 
-    // Compute bounding box of visible meshes only (just the T-shirt)
+    // ─── STEP 3: Animation mixer disabled on load to prevent zero-scale keyframes ───
+    mixer = null;
+
+    // ─── STEP 4: Compute exact bounding box of visible meshes ──────────────
+    tshirtGroup.updateMatrixWorld(true);
+
     const box = new THREE.Box3();
     let hasMesh = false;
     tshirtGroup.traverse((child) => {
       if (child.isMesh && child.visible) {
-        box.expandByObject(child);
-        hasMesh = true;
+        child.geometry.computeBoundingBox();
+        const tmp = child.geometry.boundingBox.clone().applyMatrix4(child.matrixWorld);
+        if (!tmp.isEmpty()) {
+          const s = tmp.getSize(new THREE.Vector3());
+          if (s.x > 0.001 || s.y > 0.001 || s.z > 0.001) {
+            box.union(tmp);
+            hasMesh = true;
+          }
+        }
       }
     });
 
@@ -224,79 +341,83 @@ function loadTexturesAndModel() {
       box.setFromObject(tshirtGroup);
     }
 
-    const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    
-    console.log('Tshirt bounds center x:', center.x, 'y:', center.y, 'z:', center.z);
-    console.log('Tshirt bounds size x:', size.x, 'y:', size.y, 'z:', size.z);
-    
+    const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 3.2 / (maxDim > 0 ? maxDim : 1); // Target bounding box size of 3.2 units
-    tshirtGroup.scale.setScalar(scale);
-    
-    // Center it on x and z, offset y slightly to align with camera target
-    tshirtGroup.position.set(
-      -center.x * scale,
-      -center.y * scale - 0.5,
-      -center.z * scale
-    );
-    
-    scene.add(tshirtGroup);
-    controls.target.set(0, 0, 0);
 
-    // Hierarchical debug logging
-    tshirtGroup.traverse((child) => {
-      console.log('Node info:', child.name, 'type:', child.type, 'visible:', child.visible, 'scale:', child.scale.x, child.scale.y, child.scale.z, 'pos:', child.position.x, child.position.y, child.position.z);
-      if (child.isMesh) {
-        const pos = child.geometry.attributes.position;
-        console.log('Mesh vertices count:', child.name, pos ? pos.count : 'no position attribute');
-        console.log('Mesh attributes:', child.name, Object.keys(child.geometry.attributes).join(', '));
-        console.log('Mesh groups:', child.name, child.geometry.groups ? child.geometry.groups.map(g => `start:${g.start}, count:${g.count}, index:${g.materialIndex}`).join(' | ') : 'none');
-      }
-    });
+    console.log('MODEL LOAD LOG:', modelSlug,
+      'center:', center.x.toFixed(3), center.y.toFixed(3), center.z.toFixed(3),
+      'size:', size.x.toFixed(3), size.y.toFixed(3), size.z.toFixed(3),
+      'maxDim:', maxDim.toFixed(3));
 
-    // Traverse & Set Up Materials
-    tshirtGroup.traverse((child) => {
-      if (child.isMesh) {
-        const name = child.name.toLowerCase();
-        // Hide environment spheres, backdrops, and camera rig meshes
-        if (name.includes('env') || name.includes('bg') || name.includes('camera') || name.includes('sphere')) {
-          child.visible = false;
-          return;
-        }
-
-        console.log('Original mesh material:', child.name, Array.isArray(child.material) ? child.material.map(m => m.name).join(', ') : child.material.name);
-        if (child.material) {
-          const mat = child.material;
-          console.log('Base Material maps - map:', mat.map ? mat.map.name || 'yes' : 'null', 
-                      'aoMap:', mat.aoMap ? mat.aoMap.name || 'yes' : 'null', 
-                      'normalMap:', mat.normalMap ? mat.normalMap.name || 'yes' : 'null');
-        }
-
-        // Copy uv to uv2 for proper AO mapping in standard materials
-        if (child.geometry && child.geometry.attributes.uv && !child.geometry.attributes.uv2) {
-          child.geometry.setAttribute('uv2', child.geometry.attributes.uv);
-        }
-
-        child.castShadow = true;
-        child.receiveShadow = true;
-        tshirtMeshes.push(child);
-        
-        console.log('Mesh found:', child.name);
-        setupMeshMaterial(child);
-      }
-    });
-
-    scene.updateMatrixWorld(true);
-    if (tshirtMeshes.length > 0) {
-      const worldBox = new THREE.Box3().setFromObject(tshirtMeshes[0]);
-      console.log('Tshirt static world bounds min:', worldBox.min.x, worldBox.min.y, worldBox.min.z, 'max:', worldBox.max.x, worldBox.max.y, worldBox.max.z);
+    // ─── STEP 5: Scale and center using clean wrapper group ──────────────────
+    let targetSize = 4.2;
+    let yOffset = 0.1;
+    if (modelSlug === 'cap') {
+      targetSize = 2.5; yOffset = 0.1;
+    } else if (modelSlug === 'sweatpants') {
+      targetSize = 4.0; yOffset = -0.3;
+    } else if (['hanging-tshirt', 'hanging-hoodie'].includes(modelSlug)) {
+      targetSize = 4.2; yOffset = 0.2;
+    } else if (['sweatshirt', 'hoodie', 'polo-shirt', 'zip-hoodie', 'boxy-tshirt', 'regular-tshirt', 'oversized-tshirt'].includes(modelSlug)) {
+      targetSize = 4.2; yOffset = 0.1;
+    } else {
+      targetSize = 4.5; yOffset = 0.5;
     }
 
-    if (gltf.animations && gltf.animations.length > 0) {
-      mixer = new THREE.AnimationMixer(tshirtGroup);
-      console.log('Model contains embedded animations:', gltf.animations.map(a => a.name));
-    }
+    // Offset tshirtGroup so its geometry bounding box center sits at (0, 0, 0)
+    tshirtGroup.position.set(-center.x, -center.y, -center.z);
+
+    // Create wrapper group to apply uniform scale and final scene placement
+    const wrapper = new THREE.Group();
+    wrapper.name = 'garmentWrapper';
+    wrapper.add(tshirtGroup);
+
+    const scale = maxDim > 0 ? targetSize / maxDim : 1;
+    wrapper.scale.setScalar(scale);
+    wrapper.position.set(0, yOffset, 0);
+
+    state.activeYOffset = yOffset;
+    scene.add(wrapper);
+
+    wrapper.updateMatrixWorld(true);
+    const finalBox = new THREE.Box3();
+    wrapper.traverse(c => {
+      if (c.isMesh && c.visible) {
+        c.geometry.computeBoundingBox();
+        finalBox.union(c.geometry.boundingBox.clone().applyMatrix4(c.matrixWorld));
+      }
+    });
+    const finalCenter = finalBox.getCenter(new THREE.Vector3());
+    const finalSize = finalBox.getSize(new THREE.Vector3());
+    console.log('FINAL WRAPPER VISIBLE WORLD BOUNDS:',
+      'center:', finalCenter.x.toFixed(3), finalCenter.y.toFixed(3), finalCenter.z.toFixed(3),
+      'size:', finalSize.x.toFixed(3), finalSize.y.toFixed(3), finalSize.z.toFixed(3));
+
+    controls.target.set(0, yOffset * 0.25, 0);
+    controls.update();
+
+    // ─── STEP 6: Assign premium materials to visible garment meshes ──────────
+    let materialCount = 0;
+    tshirtGroup.traverse((child) => {
+      if (!child.isMesh || !child.visible) return;
+
+      const hasMat = !!child.material;
+      const uvs = !!child.geometry?.attributes.uv;
+      console.log('  SETUP MATERIAL:', child.name, 'hasMaterial='+hasMat, 'hasUV='+uvs, 'visible='+child.visible);
+
+      // Copy uv → uv2 so aoMap / lightMap can sample it
+      if (child.geometry?.attributes.uv && !child.geometry.attributes.uv2) {
+        child.geometry.setAttribute('uv2', child.geometry.attributes.uv);
+      }
+
+      child.castShadow = true;
+      child.receiveShadow = true;
+      tshirtMeshes.push(child);
+      setupMeshMaterial(child, modelInfo);
+      materialCount++;
+    });
+    console.log('MATERIAL SETUP DONE ['+modelSlug+']: assigned materials to', materialCount, 'meshes');
 
     // Hide loader
     loader.style.opacity = '0';
@@ -308,26 +429,34 @@ function loadTexturesAndModel() {
 }
 
 // --- Setup Premium Shader Material ---
-function setupMeshMaterial(mesh) {
-  // Determine if it is outside mesh or inside/other components
-  const isOutside = mesh.name.toLowerCase().includes('outside') || mesh.name.toLowerCase().includes('body') || mesh.name.toLowerCase().includes('sleeve') || mesh.name.toLowerCase().includes('collar');
-  const isSleeve = mesh.name.toLowerCase().includes('sleeve');
-  const isCollar = mesh.name.toLowerCase().includes('collar');
 
-  const aoMap = isOutside ? defaultOutsideAO : defaultInsideAO;
+function setupMeshMaterial(mesh, modelInfo) {
+  const originalMaterial = mesh.material;
+  if (!originalMaterial) return;
 
-  const meshColor = isSleeve 
-    ? new THREE.Color(state.sleevesColor) 
-    : (isCollar ? new THREE.Color(state.collarColor) : new THREE.Color(state.garmentColor));
+  // Extract maps directly from the loaded GLTF model's original material
+  const aoMap = originalMaterial.aoMap || originalMaterial.map;
+  const normalMap = originalMaterial.normalMap;
+
+  console.log('originalMaterial properties:', JSON.stringify({
+    name: originalMaterial.name,
+    type: originalMaterial.type,
+    roughness: originalMaterial.roughness,
+    metalness: originalMaterial.metalness,
+    hasAoMap: !!originalMaterial.aoMap,
+    hasMap: !!originalMaterial.map,
+    hasNormalMap: !!originalMaterial.normalMap
+  }));
 
   // Custom standard material
   const material = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#ffffff'), // Base color (controlled by shader uniforms)
-    roughness: 0.65,
-    metalness: 0.1,
-    map: defaultOutsideAO, // Force Three.js to compile UV attributes (vMapUv) in the shader!
-    normalMap: normalFabric,
+    roughness: 0.7,
+    metalness: 0.05,
+    map: aoMap || defaultOutsideAO, // Force Three.js to compile UV attributes (vMapUv) in the shader!
+    normalMap: normalMap || normalFabric,
     normalScale: new THREE.Vector2(0.65, 0.65),
+
     side: THREE.DoubleSide,
     transparent: false,
     depthWrite: true
@@ -337,12 +466,19 @@ function setupMeshMaterial(mesh) {
     shader.uniforms.uGarmentColor = { value: new THREE.Color(state.garmentColor) };
     shader.uniforms.uSleevesColor = { value: new THREE.Color(state.sleevesColor) };
     shader.uniforms.uCollarColor = { value: new THREE.Color(state.collarColor) };
-    shader.uniforms.uOutsideAoTex = { value: defaultOutsideAO };
-    shader.uniforms.uInsideAoTex = { value: defaultInsideAO };
+    
+    // Pass custom textures
+    const activeAo = aoMap || defaultOutsideAO;
+    shader.uniforms.uOutsideAoTex = { value: activeAo };
+    shader.uniforms.uInsideAoTex = { value: activeAo };
+    
     shader.uniforms.uAcidWashTex = { value: acidWashTexture };
     shader.uniforms.uAcidWashIntensity = { value: state.acidWash };
     shader.uniforms.uDesignTex = { value: state.activeDesign ? state.activeDesign : defaultDesignTexture };
-    shader.uniforms.uDesignEnabled = { value: true };
+    
+    // Toggle chest graphic based on garment type
+    const isTop = modelInfo.type === 'top';
+    shader.uniforms.uDesignEnabled = { value: isTop };
     shader.uniforms.uDesignScale = { value: state.designScale };
     shader.uniforms.uDesignX = { value: state.designX };
     shader.uniforms.uDesignY = { value: state.designY };
@@ -363,22 +499,29 @@ function setupMeshMaterial(mesh) {
       uniform float uDesignY;
       \n` + shader.fragmentShader;
 
-    // Apply color modifications before standard shading output
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <map_fragment>',
-      `
-      // Base color based on UV regions (flipY=false space — Y axis is inverted vs source image)
-      // Sleeves: originally at image bottom (y<0.18) → in model UV y>0.82
-      // Collar:  originally at image top (y>0.70) → in model UV y<0.30
-      // Body:    middle region 0.30 <= y <= 0.82
+    // Sleeve/collar UV division logic for Tops
+    let colorLogic = '';
+    if (isTop) {
+      colorLogic = `
       vec3 baseColor = uGarmentColor;
       if (vMapUv.y > 0.82) {
         baseColor = uSleevesColor;
       } else if (vMapUv.y < 0.30) {
         baseColor = uCollarColor;
       }
-
       diffuseColor.rgb = baseColor;
+      `;
+    } else {
+      colorLogic = `
+      diffuseColor.rgb = uGarmentColor;
+      `;
+    }
+
+    // Apply color modifications before standard shading output
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `
+      ${colorLogic}
 
       // Apply AO mapping manually based on front/back facing
       vec4 aoTexColor = gl_FrontFacing
@@ -391,9 +534,6 @@ function setupMeshMaterial(mesh) {
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * washColor.rgb * 1.5, uAcidWashIntensity);
 
       // Apply Custom Graphic Design onto the front chest area
-      // In flipY=false space the front body panel is roughly:
-      //   x: 0.02 – 0.48,  y: 0.30 – 0.82  (body band excl. collar/sleeves)
-      // Chest logo sits in upper-centre of that band.
       if (uDesignEnabled && gl_FrontFacing) {
         // Front-body UV region (flipped-Y)
         float bodyXMin = 0.02;
@@ -519,16 +659,28 @@ function animate() {
   const time = clock.getElapsedTime();
 
   // 1. Play GLTF embedded animation if present
-  if (mixer) {
+  if (mixer && state.motion !== 'static') {
     mixer.update(delta * state.motionSpeed);
+    
+    // Freeze root motion by restoring saved initial root bone positions
+    if (tshirtGroup) {
+      tshirtGroup.traverse((child) => {
+        if (child.isBone && child.userData.initialPosition) {
+          child.position.copy(child.userData.initialPosition);
+        }
+      });
+    }
   }
+
+
 
   // 2. Procedural motion models
   if (tshirtGroup) {
+    const yo = state.activeYOffset;
     if (state.motion === 'walk') {
       // Bobbing up and down + subtle torso twisting swaying
       const swaySpeed = state.motionSpeed * 4.0;
-      tshirtGroup.position.y = -1.2 + Math.sin(time * swaySpeed) * 0.05;
+      tshirtGroup.position.y = yo + Math.sin(time * swaySpeed) * 0.05;
       tshirtGroup.rotation.y = Math.PI + Math.sin(time * (swaySpeed * 0.5)) * 0.08;
       tshirtGroup.rotation.z = Math.cos(time * (swaySpeed * 0.5)) * 0.03;
       
@@ -547,22 +699,22 @@ function animate() {
         mesh.position.z = Math.sin(waveSpeed + mesh.id) * 0.02;
         mesh.position.y = Math.cos(waveSpeed * 0.7 + mesh.id) * 0.01;
       });
-      tshirtGroup.position.y = -1.2;
+      tshirtGroup.position.y = yo;
       tshirtGroup.rotation.set(0, Math.PI, 0);
     } 
     else if (state.motion === 'knit') {
       // Zoom camera in close to show fabric details
-      tshirtGroup.position.set(0, -1.2, 0);
+      tshirtGroup.position.set(0, yo, 0);
       tshirtGroup.rotation.set(0, Math.PI, 0);
       tshirtMeshes.forEach(m => m.position.set(0, 0, 0));
       
       const targetZoomZ = 3.2;
       camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetZoomZ, 0.05);
-      controls.target.set(0, 0.2, 0);
+      controls.target.set(0, yo * 0.25, 0);
     } 
     else {
-      // Static mode
-      tshirtGroup.position.y = -1.2;
+      // Static mode — restore to per-garment vertical offset
+      tshirtGroup.position.y = yo;
       tshirtGroup.rotation.set(0, Math.PI, 0);
       tshirtMeshes.forEach(m => m.position.set(0, 0, 0));
     }
@@ -634,7 +786,7 @@ function export3DModel() {
     const blob = new Blob([gltf], { type: 'application/octet-stream' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `custom-tshirt-${Date.now()}.glb`;
+    link.download = `custom-${state.activeModel}-${Date.now()}.glb`;
     link.click();
   }, (error) => {
     console.error('An error occurred during GLTF export:', error);
@@ -754,6 +906,54 @@ function setupEvents() {
   bgResetBtn.addEventListener('click', () => {
     container.style.backgroundImage = 'none';
     bgUploadInput.value = '';
+  });
+
+  // Floating controls interactions
+  garmentSelect.addEventListener('change', (e) => {
+    state.activeModel = e.target.value;
+    loadActiveModel(state.activeModel);
+
+    // Dynamically show/hide sleeve/collar color pickers
+    const modelInfo = modelsConfig[state.activeModel];
+    if (modelInfo.type === 'top') {
+      pickerSleeves.classList.remove('hidden');
+      pickerCollar.classList.remove('hidden');
+    } else {
+      pickerSleeves.classList.add('hidden');
+      pickerCollar.classList.add('hidden');
+    }
+  });
+
+  floatColorBody.addEventListener('input', (e) => {
+    swatches.forEach(s => s.classList.remove('active'));
+    const color = e.target.value;
+    state.garmentColor = color;
+    floatHexBody.innerText = color.toUpperCase();
+    updateGarmentColors();
+    
+    // Sync old picker
+    garmentColorPicker.value = color;
+    garmentColorHex.innerText = color.toUpperCase();
+  });
+
+  floatColorSleeves.addEventListener('input', (e) => {
+    const color = e.target.value;
+    state.sleevesColor = color;
+    floatHexSleeves.innerText = color.toUpperCase();
+    updateGarmentColors();
+    
+    // Sync old picker
+    sleevesColorPicker.value = color;
+  });
+
+  floatColorCollar.addEventListener('input', (e) => {
+    const color = e.target.value;
+    state.collarColor = color;
+    floatHexCollar.innerText = color.toUpperCase();
+    updateGarmentColors();
+    
+    // Sync old picker
+    collarColorPicker.value = color;
   });
 
   // Color Pickers Changes
