@@ -35,9 +35,9 @@ const modelsConfig = {
 
 const state = {
   activeModel: 'oversized-tshirt',
-  garmentColor: '#ffffff',
-  sleevesColor: '#ffffff',
-  collarColor: '#ffffff',
+  garmentColor: '#333333',
+  sleevesColor: '#333333',
+  collarColor: '#333333',
   bgColor: '#1a1a1a',
   bgImage: null,
   activeDesign: null,
@@ -173,11 +173,11 @@ function initEngine() {
   controls.maxDistance = 40;
   controls.maxPolarAngle = Math.PI / 1.8;
 
-  // Basic Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  // Studio Lighting for Solid Black Garment Detail
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
   scene.add(ambientLight);
 
-  const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
   mainLight.position.set(5, 8, 5);
   mainLight.castShadow = true;
   mainLight.shadow.mapSize.width = 2048;
@@ -185,11 +185,11 @@ function initEngine() {
   mainLight.shadow.bias = -0.0001;
   scene.add(mainLight);
 
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
   fillLight.position.set(-5, 3, -5);
   scene.add(fillLight);
 
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 1.0);
   rimLight.position.set(0, 5, -8);
   scene.add(rimLight);
 
@@ -294,7 +294,7 @@ function loadActiveModel(modelSlug) {
           combined.set(new Uint8Array(b), offset);
           offset += b.byteLength;
         }
-        const blob = new Blob([combined.buffer]);
+        const blob = new Blob([combined]);
         const blobUrl = URL.createObjectURL(blob);
         json.buffers[0].uri = blobUrl;
         return new Promise((resolve, reject) => {
@@ -314,6 +314,13 @@ function loadActiveModel(modelSlug) {
   loadGltf(modelInfo.path).then((gltf) => {
     tshirtGroup = gltf.scene;
 
+    // Store initial local position for all nodes to allow safe resets
+    tshirtGroup.traverse((child) => {
+      if (!child.userData.initialPosition) {
+        child.userData.initialPosition = child.position.clone();
+      }
+    });
+
     // ─── STEP 1: Reveal zero-scaled pivot nodes ───────────────────────────────
     // Verge3D hides garment variants by setting pivot nodes to scale=(0,0,0).
     // We must set these to scale=(1,1,1) BEFORE we do any visibility logic.
@@ -325,6 +332,12 @@ function loadActiveModel(modelSlug) {
       }
     });
 
+    // Step 1.5: Rotate hanging garments 180 deg so they face front loose toward user
+    if (['hanging-tshirt', 'hanging-hoodie'].includes(modelSlug)) {
+      tshirtGroup.rotation.y = Math.PI;
+      tshirtGroup.updateMatrixWorld(true);
+    }
+
     // ─── STEP 2: Show only the static garment mesh, hide everything else ─────
     // Naming conventions across all 11 models:
     //   GARMENT (show): tshirt_static, Cap.001, hanger*, kgi_SnapLock*, Rope*, Metal lock*, 3Dmodelexport (used for some models as static), t-shirtstaticmodel
@@ -333,16 +346,34 @@ function loadActiveModel(modelSlug) {
     //   ANIMATION VARIANTS (hide): tshirt_    // Nodes / mesh patterns that should be hidden to keep clean garment presentation without hangers/cameras/env
     const hiddenPatterns = [
       'env_sphere', 'cameradefault', 'camrotate', 'tshirt_walking', 'tshirt_waves',
-      '3dmodelexport', 'v3d_proxy', 'snaplock', 'rope', 'plane', 'hanger', 'stand', 'metal01'
+      'v3d_proxy', 'snaplock', 'rope', 'plane', 'hanger', 'stand', 'metal01'
     ];
 
     let meshDebug = [];
     tshirtGroup.traverse((child) => {
-      if (!child.isMesh) return;
       const name = child.name.toLowerCase();
-      // Hide hanger hardware and duplicate Verge3D variant meshes ending in digits (e.g. tshirt_static002)
+      // Keep non-mesh container groups visible so child meshes can render
+      if (!child.isMesh) {
+        child.visible = true;
+        return;
+      }
+      // Hide animated morph-target meshes (e.g. Mesh.001, Mesh.004) when static motion is active
+      const isMorphAnimation = (child.morphTargetInfluences && child.morphTargetInfluences.length > 0) && !name.includes('regtshirt') && !name.includes('tshirt_static');
       const isDuplicateVariant = (name.includes('tshirt_static') || name.includes('3dmodelexport')) && /\d{3,}$/.test(name);
-      const shouldHide = hiddenPatterns.some(p => name.includes(p)) || isDuplicateVariant;
+      
+      // Model-specific overrides to show exactly one mesh and prevent duplicate rendering
+      let isOverriddenDuplicate = false;
+      if (modelSlug === 'regular-tshirt') {
+        if (name.includes('tshirt_static') || name.includes('regtshirt')) {
+          isOverriddenDuplicate = true;
+        }
+      } else {
+        if (name.includes('3dmodelexport')) {
+          isOverriddenDuplicate = true;
+        }
+      }
+
+      const shouldHide = hiddenPatterns.some(p => name.includes(p)) || isDuplicateVariant || isMorphAnimation || isOverriddenDuplicate;
       child.visible = !shouldHide;
       if (!shouldHide) {
         meshDebug.push(name + '→SHOW');
@@ -390,17 +421,28 @@ function loadActiveModel(modelSlug) {
 
     // ─── STEP 5: Scale and center using clean wrapper group ──────────────────
     let targetSize = 4.2;
-    let yOffset = 0.1;
+    let yOffset = 0.5;
     if (modelSlug === 'cap') {
-      targetSize = 2.5; yOffset = 0.1;
+      targetSize = 2.5;
     } else if (modelSlug === 'sweatpants') {
-      targetSize = 4.0; yOffset = -0.3;
+      targetSize = 4.0;
     } else if (modelSlug === 'sweatshirt') {
-      targetSize = 4.0; yOffset = -0.6;
+      targetSize = 4.0;
+    } else if (modelSlug === 'regular-tshirt') {
+      targetSize = 4.0;
     }
 
-    // Offset tshirtGroup so its geometry bounding box center sits at (0, 0, 0)
-    tshirtGroup.position.set(-center.x, -center.y, -center.z);
+    // Apply base rotation first so center offset can be rotated accordingly
+    const baseRotationY = (['hanging-tshirt', 'hanging-hoodie'].includes(modelSlug) ? Math.PI : 0) + Math.PI;
+    tshirtGroup.rotation.set(0, baseRotationY, 0);
+    tshirtGroup.updateMatrixWorld(true);
+
+    // Compute rotated offset vector to align mesh center to (0, 0, 0) in wrapper space
+    const centeredOffset = new THREE.Vector3(-center.x, -center.y, -center.z)
+      .applyQuaternion(tshirtGroup.quaternion);
+
+    tshirtGroup.position.copy(centeredOffset);
+    tshirtGroup.userData.centeredOffset = centeredOffset.clone();
 
     // Create wrapper group to apply uniform scale and final scene placement
     const wrapper = new THREE.Group();
@@ -432,6 +474,13 @@ function loadActiveModel(modelSlug) {
     controls.update();
 
     // ─── STEP 6: Assign premium materials to visible garment meshes ──────────
+    // Load model-specific AO map from TEXTURE_MAPS
+    const modelTexConfig = TEXTURE_MAPS[modelSlug];
+    const modelAoPath = (modelTexConfig && modelTexConfig.ao && modelTexConfig.ao[0])
+      ? `/model/${modelSlug}/${modelTexConfig.ao[0]}`
+      : null;
+    const modelAoMap = modelAoPath ? textureLoader.load(modelAoPath, (t) => { t.flipY = false; }) : null;
+
     let materialCount = 0;
     tshirtGroup.traverse((child) => {
       if (!child.isMesh || !child.visible) return;
@@ -448,7 +497,7 @@ function loadActiveModel(modelSlug) {
       child.castShadow = true;
       child.receiveShadow = true;
       tshirtMeshes.push(child);
-      setupMeshMaterial(child, modelInfo);
+      setupMeshMaterial(child, modelInfo, modelAoMap);
       materialCount++;
     });
     console.log('MATERIAL SETUP DONE ['+modelSlug+']: assigned materials to', materialCount, 'meshes');
@@ -464,32 +513,24 @@ function loadActiveModel(modelSlug) {
 
 // --- Setup Premium Shader Material ---
 
-function setupMeshMaterial(mesh, modelInfo) {
+function setupMeshMaterial(mesh, modelInfo, dedicatedAoMap) {
   const originalMaterial = mesh.material;
   if (!originalMaterial) return;
 
-  // Extract maps directly from the loaded GLTF model's original material
-  const aoMap = originalMaterial.aoMap || originalMaterial.map;
+  const aoMap = originalMaterial.aoMap || originalMaterial.map || dedicatedAoMap;
   const normalMap = originalMaterial.normalMap;
 
-  console.log('originalMaterial properties:', JSON.stringify({
-    name: originalMaterial.name,
-    type: originalMaterial.type,
-    roughness: originalMaterial.roughness,
-    metalness: originalMaterial.metalness,
-    hasAoMap: !!originalMaterial.aoMap,
-    hasMap: !!originalMaterial.map,
-    hasNormalMap: !!originalMaterial.normalMap
-  }));
-
-  // Custom standard material
+  // Custom standard material for realistic solid matte fabric
   const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#ffffff'), // Base color (controlled by shader uniforms)
-    roughness: 0.7,
-    metalness: 0.05,
-    map: aoMap || defaultOutsideAO, // Force Three.js to compile UV attributes (vMapUv) in the shader!
+    color: new THREE.Color(state.garmentColor),
+    roughness: 0.85,
+    metalness: 0.0,
+    envMapIntensity: 0.2,
+    map: defaultOutsideAO, // Enables Three.js vMapUv shader varying
+    aoMap: dedicatedAoMap || originalMaterial.aoMap || null,
+    aoMapIntensity: 0.5,
     normalMap: normalMap || normalFabric,
-    normalScale: new THREE.Vector2(0.65, 0.65),
+    normalScale: new THREE.Vector2(0.5, 0.5),
 
     side: THREE.DoubleSide,
     transparent: false,
@@ -557,11 +598,12 @@ function setupMeshMaterial(mesh, modelInfo) {
       `
       ${colorLogic}
 
-      // Apply AO mapping manually based on front/back facing
+      // Apply AO mapping manually based on front/back facing (clamped to protect dark tones)
       vec4 aoTexColor = gl_FrontFacing
         ? texture2D(uOutsideAoTex, vMapUv)
         : texture2D(uInsideAoTex, vMapUv);
-      diffuseColor.rgb *= mix(vec3(1.0), aoTexColor.rgb, 0.6);
+      vec3 aoVal = max(aoTexColor.rgb, vec3(0.25));
+      diffuseColor.rgb *= mix(vec3(1.0), aoVal, 0.5);
 
       // Apply Acid Wash texture overlay
       vec4 washColor = texture2D(uAcidWashTex, vMapUv * 2.0);
@@ -686,7 +728,7 @@ function animate() {
   requestAnimationFrame(animate);
   frameCount++;
   if (frameCount % 200 === 0) {
-    console.log('Frame count:', frameCount, 'Camera pos:', camera.position.x, camera.position.y, camera.position.z);
+    console.log('Frame count:', frameCount, 'Camera pos:', camera.position.x.toFixed(3), camera.position.y.toFixed(3), camera.position.z.toFixed(3));
   }
 
   const delta = clock.getDelta();
@@ -709,17 +751,23 @@ function animate() {
 
 
   // 2. Procedural motion models
-  if (tshirtGroup) {
-    const yo = state.activeYOffset;
+  if (tshirtGroup && tshirtGroup.userData.centeredOffset) {
+    const centeredOffset = tshirtGroup.userData.centeredOffset;
+    const baseRotationY = (['hanging-tshirt', 'hanging-hoodie'].includes(state.activeModel) ? Math.PI : 0) + Math.PI;
+
     if (state.motion === 'walk') {
       // Bobbing up and down + subtle torso twisting swaying
       const swaySpeed = state.motionSpeed * 4.0;
-      tshirtGroup.position.y = yo + Math.sin(time * swaySpeed) * 0.05;
-      tshirtGroup.rotation.y = Math.PI + Math.sin(time * (swaySpeed * 0.5)) * 0.08;
+      tshirtGroup.position.copy(centeredOffset);
+      tshirtGroup.position.y += Math.sin(time * swaySpeed) * 0.05;
+      
+      tshirtGroup.rotation.set(0, baseRotationY + Math.sin(time * (swaySpeed * 0.5)) * 0.08, 0);
       tshirtGroup.rotation.z = Math.cos(time * (swaySpeed * 0.5)) * 0.03;
       
-      // Reset mesh wave offsets
-      tshirtMeshes.forEach(m => m.position.set(0, 0, 0));
+      // Reset mesh wave offsets to initial positions
+      tshirtMeshes.forEach(m => {
+        if (m.userData.initialPosition) m.position.copy(m.userData.initialPosition);
+      });
     } 
     else if (state.motion === 'waves') {
       // Deform mesh geometry vertices slightly to simulate wind/ripples
@@ -729,28 +777,34 @@ function animate() {
         mesh.rotation.y = 0;
         mesh.rotation.z = 0;
         
-        // Procedural vertex offset emulation (mesh level oscillations)
-        mesh.position.z = Math.sin(waveSpeed + mesh.id) * 0.02;
-        mesh.position.y = Math.cos(waveSpeed * 0.7 + mesh.id) * 0.01;
+        // Procedural vertex offset emulation (mesh level oscillations on top of initial position)
+        const initial = mesh.userData.initialPosition || new THREE.Vector3();
+        mesh.position.copy(initial);
+        mesh.position.z += Math.sin(waveSpeed + mesh.id) * 0.02;
+        mesh.position.y += Math.cos(waveSpeed * 0.7 + mesh.id) * 0.01;
       });
-      tshirtGroup.position.y = yo;
-      tshirtGroup.rotation.set(0, Math.PI, 0);
+      tshirtGroup.position.copy(centeredOffset);
+      tshirtGroup.rotation.set(0, baseRotationY, 0);
     } 
     else if (state.motion === 'knit') {
       // Zoom camera in close to show fabric details
-      tshirtGroup.position.set(0, yo, 0);
-      tshirtGroup.rotation.set(0, Math.PI, 0);
-      tshirtMeshes.forEach(m => m.position.set(0, 0, 0));
+      tshirtGroup.position.copy(centeredOffset);
+      tshirtGroup.rotation.set(0, baseRotationY, 0);
+      tshirtMeshes.forEach(m => {
+        if (m.userData.initialPosition) m.position.copy(m.userData.initialPosition);
+      });
       
       const targetZoomZ = 3.2;
       camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetZoomZ, 0.05);
-      controls.target.set(0, yo * 0.25, 0);
+      controls.target.set(0, state.activeYOffset * 0.25, 0);
     } 
     else {
       // Static mode — restore to per-garment vertical offset
-      tshirtGroup.position.y = yo;
-      tshirtGroup.rotation.set(0, Math.PI, 0);
-      tshirtMeshes.forEach(m => m.position.set(0, 0, 0));
+      tshirtGroup.position.copy(centeredOffset);
+      tshirtGroup.rotation.set(0, baseRotationY, 0);
+      tshirtMeshes.forEach(m => {
+        if (m.userData.initialPosition) m.position.copy(m.userData.initialPosition);
+      });
     }
   }
 
