@@ -267,7 +267,8 @@ function loadActiveModel(modelSlug) {
     tshirtGroup = null;
     tshirtMeshes = [];
   }
-  if (mixer) { mixer.stopAllAction(); mixer = null; }
+  const modelInfo = modelsConfig[modelSlug];
+  if (!modelInfo) return;
 
   const loadGltf = async (path) => {
     const dir = path.substring(0, path.lastIndexOf('/') + 1);
